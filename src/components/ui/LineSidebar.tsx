@@ -3,7 +3,7 @@
 // Hyper-minimalist vertical nav. No filled backgrounds.
 // Spring collapse/expand + GSAP active accent line + Anime.js letter-spacing hover.
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef } from 'react';
 import { useSpring, animated } from '@react-spring/web';
 import { useGSAP } from '@gsap/react';
 import { gsap } from 'gsap';
@@ -83,15 +83,17 @@ export default function LineSidebar({ collapsed = false, onToggle }: LineSidebar
   const handleMouseEnter = async (href: string) => {
     const el = labelRefs.current[href];
     if (!el) return;
-    const anime = (await import('animejs')).default;
-    anime({ targets: el, letterSpacing: '0.08em', duration: 80, easing: 'linear' });
+    const animeModule = await import('animejs');
+    const anime = (animeModule as unknown as { default?: unknown }).default || animeModule;
+    (anime as { (params: Record<string, unknown>): void })({ targets: el, letterSpacing: '0.08em', duration: 80, easing: 'linear' });
   };
 
   const handleMouseLeave = async (href: string) => {
     const el = labelRefs.current[href];
     if (!el) return;
-    const anime = (await import('animejs')).default;
-    anime({ targets: el, letterSpacing: '0em', duration: 80, easing: 'linear' });
+    const animeModule = await import('animejs');
+    const anime = (animeModule as unknown as { default?: unknown }).default || animeModule;
+    (anime as { (params: Record<string, unknown>): void })({ targets: el, letterSpacing: '0em', duration: 80, easing: 'linear' });
   };
 
   return (
@@ -125,7 +127,7 @@ export default function LineSidebar({ collapsed = false, onToggle }: LineSidebar
               onMouseEnter={() => handleMouseEnter(item.href)}
               onMouseLeave={() => handleMouseLeave(item.href)}
               className={`
-                relative flex items-center gap-3 px-2 py-2.5 rounded-[2px]
+                relative flex items-center gap-3 px-2 py-2.5 rounded-xs
                 transition-colors duration-150
                 ${isActive ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}
                 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50

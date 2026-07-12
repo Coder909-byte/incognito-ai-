@@ -9,6 +9,11 @@ interface HeroTitleRevealProps {
   onComplete?: () => void;
 }
 
+type AnimeInstance = {
+  (params: Record<string, unknown>): { finished: Promise<void> };
+  stagger(value: number, config?: Record<string, unknown>): number;
+};
+
 export default function HeroTitleReveal({ onComplete }: HeroTitleRevealProps) {
   const mountedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -22,8 +27,10 @@ export default function HeroTitleReveal({ onComplete }: HeroTitleRevealProps) {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     const run = async () => {
+      // Dynamic import of animejs
+      const animeModule = (await import('animejs')) as any;
+const anime = animeModule.default?.default || animeModule.default || animeModule;
       if (cancelled) return;
-      const anime = (await import('animejs')).default;
       if (cancelled || !containerRef.current) return;
 
       const chars = containerRef.current.querySelectorAll('.char');

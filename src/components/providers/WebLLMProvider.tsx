@@ -3,7 +3,7 @@
 // React context wrapping useWebLLM — provides engine state to all descendants.
 // Manages the model-loading splash screen and WebGPU fallback banner.
 
-import { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, ReactNode, useEffect, useState } from 'react';
 import { useWebLLM, UseWebLLMReturn } from '@/hooks/useWebLLM';
 import ModelLoadingSplash from '@/components/ui/ModelLoadingSplash';
 
@@ -11,22 +11,27 @@ const WebLLMContext = createContext<UseWebLLMReturn | null>(null);
 
 export function WebLLMProvider({ children }: { children: ReactNode }) {
   const webllm = useWebLLM();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <WebLLMContext.Provider value={webllm}>
-      {/* Fullscreen splash while model is loading */}
-      {(webllm.status === 'loading' || webllm.status === 'idle') && (
+      {/* Fullscreen splash while model is loading - only render after hydration */}
+      {mounted && (webllm.status === 'loading' || webllm.status === 'idle') && (
         <ModelLoadingSplash
           progress={webllm.progress}
           progressText={webllm.progressText}
         />
       )}
 
-      {/* Non-blocking WebGPU unavailable banner */}
-      {webllm.status === 'no_webgpu' && (
+      {/* Non-blocking WebGPU unavailable banner - only render after hydration */}
+      {mounted && webllm.status === 'no_webgpu' && (
         <div
           role="alert"
-          className="fixed top-0 inset-x-0 z-[200] flex items-center gap-3 px-6 py-3 bg-amber-950/90 border-b border-amber-800/60 backdrop-blur-sm text-amber-300 text-sm font-mono"
+          className="fixed top-0 inset-x-0 z-200 flex items-center gap-3 px-6 py-3 bg-amber-950/90 border-b border-amber-800/60 backdrop-blur-sm text-amber-300 text-sm font-mono"
         >
           <span className="text-amber-400">⚠</span>
           <span>

@@ -185,7 +185,7 @@ export default function ModelLoadingSplash({ progress, progressText }: ModelLoad
         </div>
 
         {/* Privacy badge */}
-        <div className="flex items-center gap-2 px-4 py-2 border border-zinc-800/60 rounded-[2px] bg-zinc-900/40 backdrop-blur-sm">
+        <div className="flex items-center gap-2 px-4 py-2 border border-zinc-800/60 rounded-xs bg-zinc-900/40 backdrop-blur-sm">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 1L2 3v4c0 2.8 2.1 5.4 5 6 2.9-.6 5-3.2 5-6V3L7 1z"
               stroke="#10b981" strokeWidth="1" fill="rgba(16,185,129,0.1)" />
