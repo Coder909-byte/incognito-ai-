@@ -1,16 +1,11 @@
 'use client';
 // src/components/ui/LineSidebar.tsx
 // Hyper-minimalist vertical nav. No filled backgrounds.
-// Spring collapse/expand + GSAP active accent line + Anime.js letter-spacing hover.
+// CSS transitions for collapse/expand + active accent line + hover effects.
 
-import { useRef } from 'react';
-import { useSpring, animated } from '@react-spring/web';
-import { useGSAP } from '@gsap/react';
-import { gsap } from 'gsap';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-gsap.registerPlugin();
 
 interface NavItem {
   href: string;
@@ -55,53 +50,37 @@ export default function LineSidebar({ collapsed = false, onToggle }: LineSidebar
   const accentRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const labelRefs = useRef<Record<string, HTMLSpanElement | null>>({});
 
-  // Spring width: organic mass/tension collapse
-  const springStyle = useSpring({
-    width: collapsed ? 56 : 220,
-    config: { mass: 1, tension: 210, friction: 24 },
-  });
-
-  // GSAP active accent line: scaleY from 0 → 1
-  useGSAP(() => {
+  // Update active accent line when pathname changes
+  useEffect(() => {
     NAV_ITEMS.forEach((item) => {
       const accentEl = accentRefs.current[item.href];
       if (!accentEl) return;
       const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
-      gsap.fromTo(
-        accentEl,
-        { scaleY: 0, transformOrigin: 'top center' },
-        {
-          scaleY: isActive ? 1 : 0,
-          duration: 0.35,
-          ease: 'power2.out',
-        }
-      );
+      accentEl.style.transform = isActive ? 'scaleY(1)' : 'scaleY(0)';
     });
-  }, { scope: containerRef, dependencies: [pathname] });
+  }, [pathname]);
 
-  // Anime.js hover: letter-spacing widen (80ms)
-  const handleMouseEnter = async (href: string) => {
+  // Hover effect for letter-spacing using CSS transition
+  const handleMouseEnter = (href: string) => {
     const el = labelRefs.current[href];
-    if (!el) return;
-    const animeModule = await import('animejs');
-    const anime = (animeModule as unknown as { default?: unknown }).default || animeModule;
-    (anime as { (params: Record<string, unknown>): void })({ targets: el, letterSpacing: '0.08em', duration: 80, easing: 'linear' });
+    if (el) {
+      el.style.letterSpacing = '0.08em';
+    }
   };
 
-  const handleMouseLeave = async (href: string) => {
+  const handleMouseLeave = (href: string) => {
     const el = labelRefs.current[href];
-    if (!el) return;
-    const animeModule = await import('animejs');
-    const anime = (animeModule as unknown as { default?: unknown }).default || animeModule;
-    (anime as { (params: Record<string, unknown>): void })({ targets: el, letterSpacing: '0em', duration: 80, easing: 'linear' });
+    if (el) {
+      el.style.letterSpacing = '0em';
+    }
   };
 
   return (
-    <animated.nav
+    <nav
       ref={containerRef}
-      style={springStyle}
       aria-label="Main navigation"
-      className="relative flex flex-col h-full border-r border-zinc-800/40 overflow-hidden shrink-0 z-20"
+      className="relative flex flex-col h-full border-r border-zinc-800/40 overflow-hidden shrink-0 z-20 transition-all duration-300"
+      style={{ width: collapsed ? 56 : 220 }}
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-14 border-b border-zinc-800/40 shrink-0">
@@ -134,11 +113,11 @@ export default function LineSidebar({ collapsed = false, onToggle }: LineSidebar
               `}
               aria-current={isActive ? 'page' : undefined}
             >
-              {/* Emerald accent line — GSAP scaleY */}
+              {/* Emerald accent line — CSS scaleY transition */}
               <div
                 ref={(el) => { accentRefs.current[item.href] = el; }}
-                className="absolute left-0 top-0 bottom-0 w-px bg-emerald-500"
-                style={{ transform: 'scaleY(0)', transformOrigin: 'top center' }}
+                className="absolute left-0 top-0 bottom-0 w-px bg-emerald-500 transition-transform duration-300 origin-top"
+                style={{ transform: 'scaleY(0)' }}
                 aria-hidden="true"
               />
 
@@ -147,7 +126,8 @@ export default function LineSidebar({ collapsed = false, onToggle }: LineSidebar
               {!collapsed && (
                 <span
                   ref={(el) => { labelRefs.current[item.href] = el; }}
-                  className="text-[12px] font-mono tracking-normal whitespace-nowrap"
+                  className="text-[12px] font-mono tracking-normal whitespace-nowrap transition-all duration-80"
+                  style={{ transitionProperty: 'letter-spacing' }}
                 >
                   {item.label}
                 </span>
@@ -169,6 +149,6 @@ export default function LineSidebar({ collapsed = false, onToggle }: LineSidebar
           <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-    </animated.nav>
+    </nav>
   );
 }

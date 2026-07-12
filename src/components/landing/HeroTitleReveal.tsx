@@ -1,6 +1,6 @@
 'use client';
 // src/components/landing/HeroTitleReveal.tsx
-// Character-split title reveal via Anime.js stagger.
+// Character-split title reveal via CSS animations + Web Animations API.
 // Mount-ref guards double-fire under React Strict Mode remounts.
 
 import { useEffect, useRef } from 'react';
@@ -8,11 +8,6 @@ import { useEffect, useRef } from 'react';
 interface HeroTitleRevealProps {
   onComplete?: () => void;
 }
-
-type AnimeInstance = {
-  (params: Record<string, unknown>): { finished: Promise<void> };
-  stagger(value: number, config?: Record<string, unknown>): number;
-};
 
 export default function HeroTitleReveal({ onComplete }: HeroTitleRevealProps) {
   const mountedRef = useRef(false);
@@ -27,43 +22,51 @@ export default function HeroTitleReveal({ onComplete }: HeroTitleRevealProps) {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     const run = async () => {
-      // Dynamic import of animejs
-      const animeModule = (await import('animejs')) as any;
-const anime = animeModule.default?.default || animeModule.default || animeModule;
-      if (cancelled) return;
       if (cancelled || !containerRef.current) return;
 
-      const chars = containerRef.current.querySelectorAll('.char');
-      const subChars = containerRef.current.querySelectorAll('.sub-char');
+      const chars = containerRef.current.querySelectorAll<HTMLElement>('.char');
+      const subChars = containerRef.current.querySelectorAll<HTMLElement>('.sub-char');
 
       if (mq.matches) {
         // Reduced-motion: instant opacity reveal only
-        anime({ targets: chars, opacity: [0, 1], duration: 300, easing: 'linear' });
-        anime({ targets: subChars, opacity: [0, 1], duration: 300, easing: 'linear', delay: 150 });
+        chars.forEach(el => el.style.opacity = '1');
+        subChars.forEach(el => el.style.opacity = '1');
         onComplete?.();
         return;
       }
 
-      await anime({
-        targets: chars,
-        translateY: [32, 0],
-        opacity: [0, 1],
-        delay: anime.stagger(30, { start: 100 }),
-        duration: 600,
-        easing: 'cubicBezier(0.16, 1, 0.3, 1)',
-      }).finished;
+      // Animate main title characters with stagger
+      const charPromises: Promise<void>[] = [];
+      chars.forEach((el, i) => {
+        const delay = 100 + i * 30;
+        const promise = el.animate(
+          [
+            { transform: 'translateY(32px)', opacity: 0 },
+            { transform: 'translateY(0)', opacity: 1 }
+          ],
+          { duration: 600, delay, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' }
+        ).finished.then(() => {});
+        charPromises.push(promise);
+      });
 
+      await Promise.all(charPromises);
       if (cancelled) return;
 
-      await anime({
-        targets: subChars,
-        translateY: [16, 0],
-        opacity: [0, 1],
-        delay: anime.stagger(20, { start: 0 }),
-        duration: 500,
-        easing: 'cubicBezier(0.16, 1, 0.3, 1)',
-      }).finished;
+      // Animate subtitle characters with stagger
+      const subCharPromises: Promise<void>[] = [];
+      subChars.forEach((el, i) => {
+        const delay = i * 20;
+        const promise = el.animate(
+          [
+            { transform: 'translateY(16px)', opacity: 0 },
+            { transform: 'translateY(0)', opacity: 1 }
+          ],
+          { duration: 500, delay, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' }
+        ).finished.then(() => {});
+        subCharPromises.push(promise);
+      });
 
+      await Promise.all(subCharPromises);
       if (!cancelled) onComplete?.();
     };
 

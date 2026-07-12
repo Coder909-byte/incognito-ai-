@@ -1,9 +1,8 @@
 'use client';
 // src/components/ui/DocumentListItem.tsx
-// Document card with class .doc-item for Anime.js stagger targeting.
-// motion/react layoutId for shared-layout morph to editor canvas.
+// Document card with CSS animations - no motion/react dependency.
+// Simple fade-in animation with CSS.
 
-import { motion } from 'motion/react';
 import Link from 'next/link';
 import type { Document } from '@/types';
 
@@ -35,37 +34,26 @@ export default function DocumentListItem({ document, index }: DocumentListItemPr
     : '';
 
   return (
-    <motion.div
-      layoutId={`doc-card-${document.id}`}
+    <div
       className="doc-item"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: index * 0.04, duration: 0.3 }}
+      style={{
+        opacity: 1,
+        animation: `fadeIn 0.3s ease-out ${index * 0.04}s both`
+      }}
     >
       <Link
         href={`/editor/${document.id}`}
         id={`doc-item-${document.id}`}
-        className="
-          group block relative p-5 rounded-[2px]
-          bg-zinc-900/40 border border-zinc-800/50
-          hover:border-zinc-700/70 hover:bg-zinc-900/60
-          backdrop-blur-sm transition-all duration-200
-          focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50
-        "
+        className="group block relative p-5 rounded-[2px] bg-zinc-900/40 border border-zinc-800/50 hover:border-zinc-700/70 hover:bg-zinc-900/60 backdrop-blur-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50"
       >
         {/* Hover accent line */}
-        <div className="
-          absolute left-0 top-3 bottom-3 w-px bg-emerald-500
-          scale-y-0 group-hover:scale-y-100
-          transition-transform duration-200 origin-center
-        " aria-hidden="true" />
+        <div
+          className="absolute left-0 top-3 bottom-3 w-px bg-emerald-500 scale-y-0 group-hover:scale-y-100 transition-transform duration-200 origin-center"
+          aria-hidden="true"
+        />
 
         {/* Title */}
-        <h3 className="
-          text-zinc-200 text-sm font-mono mb-2
-          group-hover:text-zinc-100 transition-colors duration-150
-          truncate
-        ">
+        <h3 className="text-zinc-200 text-sm font-mono mb-2 group-hover:text-zinc-100 transition-colors duration-150 truncate">
           {document.title || 'Untitled'}
         </h3>
 
@@ -87,6 +75,19 @@ export default function DocumentListItem({ document, index }: DocumentListItemPr
           </div>
         </div>
       </Link>
-    </motion.div>
+
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+    </div>
   );
 }

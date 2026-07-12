@@ -1,10 +1,9 @@
 'use client';
 // src/app/(workspace)/layout.tsx
 // Authenticated workspace shell — LineSidebar + main content area.
-// AnimatePresence for route transitions between dashboard ↔ editor.
+// Simple conditional rendering for route changes.
 
 import { useState } from 'react';
-import { AnimatePresence } from 'motion/react';
 import LineSidebar from '@/components/ui/LineSidebar';
 import GrainientBackground from '@/components/ui/GrainientBackground';
 
@@ -24,9 +23,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         className="relative z-10 flex-1 flex flex-col overflow-y-auto"
         id="workspace-main"
       >
-        <AnimatePresence mode="wait">
-          {children}
-        </AnimatePresence>
+        {children}
       </main>
     </div>
   );

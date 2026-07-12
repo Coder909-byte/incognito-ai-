@@ -1,10 +1,9 @@
 'use client';
 // src/components/ui/ContextActionToolbar.tsx
-// Floats above text selection with spring-physics bounce entrance.
+// Floats above text selection with CSS transition entrance.
 // Triggers rewrite/summarize/expand actions via WebLLM context.
 
-import { useRef, useEffect } from 'react';
-import { useTransition, animated } from '@react-spring/web';
+import { useRef, useEffect, useState } from 'react';
 import { useWebLLMContext } from '@/components/providers/WebLLMProvider';
 import type { SelectionState, ActionType } from '@/types';
 
@@ -51,15 +50,20 @@ const PROMPT_MAP: Record<ActionType, (text: string) => string> = {
 export default function ContextActionToolbar({ selection, onAction }: ContextActionToolbarProps) {
   const { status, generate } = useWebLLMContext();
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
 
-  const isVisible = !!selection.rect && !!selection.text && status === 'ready';
+  const isReady = !!selection.rect && !!selection.text && status === 'ready';
 
-  const transitions = useTransition(isVisible, {
-    from:   { opacity: 0, transform: 'translateY(8px) scale(0.95)' },
-    enter:  { opacity: 1, transform: 'translateY(0px) scale(1)' },
-    leave:  { opacity: 0, transform: 'translateY(4px) scale(0.97)' },
-    config: { mass: 1.2, tension: 300, friction: 22 },
-  });
+  // Show/hide toolbar with CSS transition
+  useEffect(() => {
+    if (isReady) {
+      // Small delay to allow CSS transition
+      const timer = setTimeout(() => setIsVisible(true), 10);
+      return () => clearTimeout(timer);
+    } else {
+      setIsVisible(false);
+    }
+  }, [isReady]);
 
   const handleAction = async (action: ActionType) => {
     if (!selection.text) return;
@@ -78,46 +82,53 @@ export default function ContextActionToolbar({ selection, onAction }: ContextAct
       }
     : { display: 'none' };
 
-  return transitions((springStyle, show) =>
-    show ? (
-      <animated.div
-        ref={toolbarRef}
-        role="toolbar"
-        aria-label="AI actions for selected text"
-        style={{ ...springStyle, ...style, zIndex: 100 }}
-        className="flex items-center gap-[2px] px-1 py-1 rounded-[3px] bg-zinc-900/95 border border-zinc-700/60 backdrop-blur-xl shadow-xl shadow-black/40"
-      >
-        {ACTIONS.map(({ type, label, Icon }) => (
-          <button
-            key={type}
-            id={`toolbar-${type}`}
-            onClick={() => handleAction(type)}
-            title={label}
-            aria-label={label}
-            disabled={status !== 'ready'}
-            className="
-              flex items-center gap-1.5 px-2.5 py-1.5 rounded-[2px]
-              text-zinc-400 text-[11px] font-mono tracking-wide
-              hover:text-emerald-400 hover:bg-zinc-800/80
-              disabled:opacity-40 disabled:cursor-not-allowed
-              transition-colors duration-150
-              focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50
-            "
-          >
-            <Icon />
-            <span>{label}</span>
-          </button>
-        ))}
+  return (
+    <div
+      ref={toolbarRef}
+      role="toolbar"
+      aria-label="AI actions for selected text"
+      style={{
+        ...style,
+        zIndex: 100,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible 
+          ? `${style.transform || ''} translateY(0px) scale(1)`
+          : `${style.transform || ''} translateY(8px) scale(0.95)`,
+        transition: 'opacity 0.2s ease-out, transform 0.2s ease-out',
+        pointerEvents: isVisible ? 'auto' : 'none',
+      }}
+      className="flex items-center gap-[2px] px-1 py-1 rounded-[3px] bg-zinc-900/95 border border-zinc-700/60 backdrop-blur-xl shadow-xl shadow-black/40"
+    >
+      {ACTIONS.map(({ type, label, Icon }) => (
+        <button
+          key={type}
+          id={`toolbar-${type}`}
+          onClick={() => handleAction(type)}
+          title={label}
+          aria-label={label}
+          disabled={status !== 'ready'}
+          className="
+            flex items-center gap-1.5 px-2.5 py-1.5 rounded-[2px]
+            text-zinc-400 text-[11px] font-mono tracking-wide
+            hover:text-emerald-400 hover:bg-zinc-800/80
+            disabled:opacity-40 disabled:cursor-not-allowed
+            transition-colors duration-150
+            focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50
+          "
+        >
+          <Icon />
+          <span>{label}</span>
+        </button>
+      ))}
 
-        {/* Separator */}
-        <div className="w-px h-4 bg-zinc-700/60 mx-0.5" aria-hidden="true" />
+      {/* Separator */}
+      <div className="w-px h-4 bg-zinc-700/60 mx-0.5" aria-hidden="true" />
 
-        {/* Local badge */}
-        <div className="flex items-center gap-1 px-2 py-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-          <span className="text-zinc-600 text-[10px] font-mono">local</span>
-        </div>
-      </animated.div>
-    ) : null
+      {/* Local badge */}
+      <div className="flex items-center gap-1 px-2 py-1.5">
+        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+        <span className="text-zinc-600 text-[10px] font-mono">local</span>
+      </div>
+    </div>
   );
 }

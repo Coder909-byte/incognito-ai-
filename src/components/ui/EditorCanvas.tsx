@@ -2,9 +2,9 @@
 // src/components/ui/EditorCanvas.tsx
 // Glassmorphic markdown editor surface.
 // Border morphs to emerald ONLY after WebLLM engine reports status: "ready".
+// Uses CSS transitions instead of GSAP.
 
 import { useRef, useEffect, useCallback } from 'react';
-import { gsap } from 'gsap';
 import { useWebLLMContext } from '@/components/providers/WebLLMProvider';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import ContextActionToolbar from './ContextActionToolbar';
@@ -28,38 +28,21 @@ export default function EditorCanvas({
   const { status } = useWebLLMContext();
   const borderRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const prevStatusRef = useRef(status);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const selection = useTextSelection(editorContainerRef as React.RefObject<HTMLElement | null>);
 
-  // Border morph: zinc-800 → #10b981 via GSAP tween, fires only on status: "ready"
+  // Border morph: zinc-800 → #10b981 via CSS transition, fires only on status: "ready"
   useEffect(() => {
     if (!borderRef.current) return;
     const el = borderRef.current;
 
-    if (status === 'ready' && prevStatusRef.current !== 'ready') {
-      // Reduce-motion guard
-      const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-      if (mq.matches) {
-        el.style.borderColor = '#10b981';
-      } else {
-        gsap.fromTo(
-          el,
-          { borderColor: 'rgba(63,63,70,0.5)' },
-          {
-            borderColor: '#10b981',
-            duration: 1.2,
-            ease: 'power2.out',
-          }
-        );
-      }
+    if (status === 'ready') {
+      el.style.borderColor = '#10b981';
+      el.style.transition = 'border-color 1.2s ease-out';
+    } else {
+      el.style.borderColor = 'rgba(63,63,70,0.5)';
+      el.style.transition = 'border-color 0.4s ease-in';
     }
-
-    if (status !== 'ready' && prevStatusRef.current === 'ready') {
-      gsap.to(el, { borderColor: 'rgba(63,63,70,0.5)', duration: 0.4, ease: 'power2.in' });
-    }
-
-    prevStatusRef.current = status;
   }, [status]);
 
   // Auto-resize textarea
@@ -83,7 +66,8 @@ export default function EditorCanvas({
       {/* Glassmorphic shell */}
       <div
         ref={borderRef}
-        className="relative rounded-[2px] backdrop-blur-xl bg-zinc-900/30 border border-zinc-800/50 transition-none overflow-hidden"
+        className="relative rounded-[2px] backdrop-blur-xl bg-zinc-900/30 border border-zinc-800/50 overflow-hidden"
+        style={{ transition: 'border-color 0.4s ease-in' }}
       >
         {/* Status indicator */}
         <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/40">
