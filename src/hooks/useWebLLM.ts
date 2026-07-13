@@ -9,6 +9,10 @@ import { estimateTokensSaved } from '@/lib/analytics';
 
 const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC';
 
+// Global singleton tracking to defeat React Strict Mode double-instantiation
+let globalEnginePromise: Promise<any> | null = null;
+let globalWorker: Worker | null = null;
+
 export interface UseWebLLMReturn {
   status: WebLLMStatus;
   progress: number;
@@ -20,7 +24,7 @@ export interface UseWebLLMReturn {
 }
 
 export function useWebLLM(): UseWebLLMReturn {
-  const engineRef = useRef<Awaited<ReturnType<typeof CreateWebWorkerMLCEngine>> | null>(null);
+  const engineRef = useRef<any>(null);
   const abortRef = useRef(false);
 
   const [status, setStatus] = useState<WebLLMStatus>(() => {
@@ -34,37 +38,64 @@ export function useWebLLM(): UseWebLLMReturn {
   const [streamedTokens, setStreamedTokens] = useState('');
   const [tokensSaved, setTokensSaved] = useState(0);
 
+  const statusRef = useRef<WebLLMStatus>(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   useEffect(() => {
     const isNoWebGPU = status === 'no_webgpu';
     if (isNoWebGPU) return;
 
     let cancelled = false;
 
-    // Safety timeout: If your hardware hangs trying to compile the model, 
-    // force-unfreeze the UI after 5 seconds by treating it as an error/fallback state.
+    // Safety timeout: Triggers if compilation completely freezes up
     const safetyTimeout = setTimeout(() => {
-      if (!cancelled && engineRef.current === null && status !== 'ready') {
+      if (!cancelled && engineRef.current === null && statusRef.current !== 'ready') {
         console.warn('[WebLLM] Local engine taking its time to build cache...');
         setStatus('error'); 
       }
-    }, 60000);
-    CreateWebWorkerMLCEngine(
-      new Worker(new URL('../workers/web-llm.worker.ts', import.meta.url), { type: 'module' }),
-      MODEL_ID,
-      {
-        initProgressCallback: (report) => {
-          if (cancelled) return;
-          const pct = Math.round((report.progress ?? 0) * 100);
-          setProgress(pct);
-          setProgressText(report.text ?? '');
-          if (report.progress >= 1) {
-            clearTimeout(safetyTimeout);
-            setStatus('ready');
-            setProgress(100);
-          }
-        },
+    }, 180000);
+
+    // If the engine isn't created yet, create it exactly ONCE globally
+    if (!globalEnginePromise) {
+      globalWorker = new Worker(
+        new URL('../workers/web-llm.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      
+      globalEnginePromise = CreateWebWorkerMLCEngine(
+        globalWorker,
+        MODEL_ID,
+        {
+          initProgressCallback: (report) => {
+            // Send updates out to the active window UI
+            const pct = Math.round((report.progress ?? 0) * 100);
+            window.dispatchEvent(new CustomEvent('webllm-progress', { 
+              detail: { pct, text: report.text ?? '', progress: report.progress } 
+            }));
+          },
+        }
+      );
+    }
+
+    // Listen to the unique global build stream events
+    const handleProgressUpdate = (e: Event) => {
+      if (cancelled) return;
+      const { pct, text, progress: rawProgress } = (e as CustomEvent).detail;
+      setProgress(pct);
+      setProgressText(text);
+      if (rawProgress >= 1) {
+        clearTimeout(safetyTimeout);
+        setStatus('ready');
+        setProgress(100);
       }
-    )
+    };
+
+    window.addEventListener('webllm-progress', handleProgressUpdate);
+
+    // Attach to the resolved engine instance
+    globalEnginePromise
       .then((engine) => {
         if (cancelled) return;
         clearTimeout(safetyTimeout);
@@ -81,6 +112,7 @@ export function useWebLLM(): UseWebLLMReturn {
     return () => {
       cancelled = true;
       clearTimeout(safetyTimeout);
+      window.removeEventListener('webllm-progress', handleProgressUpdate);
     };
   }, []);
 
