@@ -1,6 +1,6 @@
 'use client';
 // src/hooks/useWebLLM.ts
-// Main-thread bridge to the WebLLM web worker with an Intel-Mac deadlock timeout safeguard.
+// Main-thread bridge to the WebLLM web worker with an updated 90s initialization ceiling.
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { CreateWebWorkerMLCEngine } from '@mlc-ai/web-llm';
@@ -9,7 +9,7 @@ import { estimateTokensSaved } from '@/lib/analytics';
 
 const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC';
 
-// Global singleton tracking to defeat React Strict Mode double-instantiation
+// Global singleton tracking to completely defeat React Strict Mode double-instantiation
 let globalEnginePromise: Promise<any> | null = null;
 let globalWorker: Worker | null = null;
 
@@ -39,6 +39,8 @@ export function useWebLLM(): UseWebLLMReturn {
   const [tokensSaved, setTokensSaved] = useState(0);
 
   const statusRef = useRef<WebLLMStatus>(status);
+  const stallTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
@@ -49,15 +51,22 @@ export function useWebLLM(): UseWebLLMReturn {
 
     let cancelled = false;
 
-    // Safety timeout: Triggers if compilation completely freezes up
-    const safetyTimeout = setTimeout(() => {
-      if (!cancelled && engineRef.current === null && statusRef.current !== 'ready') {
-        console.warn('[WebLLM] Local engine taking its time to build cache...');
-        setStatus('error'); 
-      }
-    }, 180000);
+    // Fixed Watchdog Threshold: Set to 90 seconds to handle slow network/shader compilations safely
+    const resetStallTimeout = () => {
+      if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+      
+      stallTimeoutRef.current = setTimeout(() => {
+        if (!cancelled && engineRef.current === null && statusRef.current !== 'ready') {
+          console.warn('[WebLLM] Local engine taking its time to build cache...');
+          setStatus('error'); 
+        }
+      }, 90000); // 90 seconds threshold as suggested by assistant
+    };
 
-    // If the engine isn't created yet, create it exactly ONCE globally
+    // Initialize the threshold watchdog
+    resetStallTimeout();
+
+    // If the engine isn't created yet, spawn the worker exactly ONCE globally
     if (!globalEnginePromise) {
       globalWorker = new Worker(
         new URL('../workers/web-llm.worker.ts', import.meta.url),
@@ -69,7 +78,6 @@ export function useWebLLM(): UseWebLLMReturn {
         MODEL_ID,
         {
           initProgressCallback: (report) => {
-            // Send updates out to the active window UI
             const pct = Math.round((report.progress ?? 0) * 100);
             window.dispatchEvent(new CustomEvent('webllm-progress', { 
               detail: { pct, text: report.text ?? '', progress: report.progress } 
@@ -79,14 +87,19 @@ export function useWebLLM(): UseWebLLMReturn {
       );
     }
 
-    // Listen to the unique global build stream events
+    // Handle global engine initialization update messages
     const handleProgressUpdate = (e: Event) => {
       if (cancelled) return;
       const { pct, text, progress: rawProgress } = (e as CustomEvent).detail;
+      
       setProgress(pct);
       setProgressText(text);
+
+      // Reset timer whenever progress events successfully bubble up to the main UI thread
+      resetStallTimeout();
+
       if (rawProgress >= 1) {
-        clearTimeout(safetyTimeout);
+        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
         setStatus('ready');
         setProgress(100);
       }
@@ -94,24 +107,24 @@ export function useWebLLM(): UseWebLLMReturn {
 
     window.addEventListener('webllm-progress', handleProgressUpdate);
 
-    // Attach to the resolved engine instance
+    // Track promise resolution cleanly across render cycles
     globalEnginePromise
       .then((engine) => {
         if (cancelled) return;
-        clearTimeout(safetyTimeout);
+        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current); // Success: Stop watchdog instantly
         engineRef.current = engine;
         setStatus('ready');
       })
       .catch((err) => {
         if (cancelled) return;
-        clearTimeout(safetyTimeout);
-        console.error('[WebLLM] Engine init error:', err);
+        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current); // Error: Stop watchdog instantly
+        console.error('[WebLLM] Engine native initialization failure:', err);
         setStatus('error');
       });
 
     return () => {
       cancelled = true;
-      clearTimeout(safetyTimeout);
+      if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
       window.removeEventListener('webllm-progress', handleProgressUpdate);
     };
   }, []);
