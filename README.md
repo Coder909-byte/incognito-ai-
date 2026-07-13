@@ -29,7 +29,7 @@ SETUP INSTRUCTIONS
 
 Follow these steps to spin up the local development environment:
 Clone the Repository:
-git clone https://github.com/YOUR_USERNAME/incognito-ai.git
+git clone https://github.com/Coder909-byte/incognito-ai-.git
 cd incognito-ai
 Install Dependencies:
 npm install
