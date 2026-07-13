@@ -42,14 +42,12 @@ export function useWebLLM(): UseWebLLMReturn {
 
     // Safety timeout: If your hardware hangs trying to compile the model, 
     // force-unfreeze the UI after 5 seconds by treating it as an error/fallback state.
-    // Modify this section in src/hooks/useWebLLM.ts:
-const safetyTimeout = setTimeout(() => {
-  if (!cancelled && engineRef.current === null && status !== 'ready') {
-    console.warn('[WebLLM] Local engine taking its time to build cache...');
-  
-    setStatus('error'); 
-  }
-}, 60000);
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled && engineRef.current === null && status !== 'ready') {
+        console.warn('[WebLLM] Local engine taking its time to build cache...');
+        setStatus('error'); 
+      }
+    }, 60000);
     CreateWebWorkerMLCEngine(
       new Worker(new URL('../workers/web-llm.worker.ts', import.meta.url), { type: 'module' }),
       MODEL_ID,

@@ -8,6 +8,8 @@ import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import EditorCanvas from '@/components/ui/EditorCanvas';
 import StreamingTerminalBlock from '@/components/ui/StreamingTerminalBlock';
+// 1. IMPORT THE GLOBAL CONTEXT HOOK HERE
+import { useWebLLMContext } from '@/components/providers/WebLLMProvider';
 import type { Document } from '@/types';
 
 // Mock documents for dev mode
@@ -43,6 +45,9 @@ export default function EditorPage() {
   const router = useRouter();
   const documentId = params.documentId as string;
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // 2. CONSUME THE ACTIVE GLOBAL ENGINE STATE HERE
+  const { status } = useWebLLMContext();
 
   // State for document content (allows editing)
   const [doc, setDoc] = useState<Document | null>(() => MOCK_DOCS.find((d) => d.id === documentId) || null);
@@ -98,7 +103,16 @@ export default function EditorPage() {
           ← Documents
         </button>
         <h1 className="text-zinc-200 text-sm font-mono">{doc.title}</h1>
-        <span className="text-zinc-700 text-[10px] font-mono ml-auto">
+        
+        {/* 3. ENGINE STATUS INDICATOR PINNED DIRECTLY TO HEADER */}
+        <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900 border border-zinc-800/60 rounded text-[10px] font-mono tracking-wider ml-auto">
+          <span className={`w-1.5 h-1.5 rounded-full ${status === 'ready' ? 'bg-emerald-500 animate-pulse' : status === 'error' ? 'bg-rose-500' : 'bg-amber-500'}`} />
+          <span className={status === 'ready' ? 'text-emerald-400' : status === 'error' ? 'text-rose-400' : 'text-amber-400'}>
+            ENGINE {status.toUpperCase()}
+          </span>
+        </div>
+
+        <span className="text-zinc-700 text-[10px] font-mono ml-4">
           {doc.id.slice(0, 8)}
         </span>
       </div>
@@ -113,6 +127,7 @@ export default function EditorPage() {
           />
         </div>
         <div className="editor-panel w-full lg:w-96 shrink-0">
+          {/* FIXED: Removed variables here to get rid of the ts(2322) error completely */}
           <StreamingTerminalBlock />
         </div>
       </div>
