@@ -1,6 +1,5 @@
 'use client';
 // src/hooks/useWebLLM.ts
-// Main-thread bridge to the WebLLM web worker with a responsive, progress-linked watchdog timer.
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { CreateWebWorkerMLCEngine } from '@mlc-ai/web-llm';
@@ -50,19 +49,19 @@ export function useWebLLM(): UseWebLLMReturn {
 
     let cancelled = false;
 
-    // AI ADVICE IMPLEMENTATION: Watchdog function linked to progress updates
+    // Resettable watchdog timer (180s for slow disk I/O / shader compilation on old hardware)
     const resetStallTimeout = () => {
       if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
       
       stallTimeoutRef.current = setTimeout(() => {
         if (!cancelled && engineRef.current === null && statusRef.current !== 'ready') {
-          console.warn('[WebLLM] Local engine stalled: No progress for 90s');
+          console.warn('[WebLLM] Local engine stalled: No progress for 180s');
           setStatus('error'); 
         }
-      }, 90000); // 90 seconds threshold as explicitly suggested
+      }, 180000); 
     };
 
-    // Start the watchdog monitoring immediately on mount
+    // Initialize watchdog timer immediately on mount
     resetStallTimeout();
 
     if (!globalEnginePromise) {
@@ -71,22 +70,21 @@ export function useWebLLM(): UseWebLLMReturn {
         { type: 'module' }
       );
       
+      // Fixed: using the correct property 'initProgressCallback' recognized by MLCEngineConfig
       globalEnginePromise = CreateWebWorkerMLCEngine(
         globalWorker,
         MODEL_ID,
         {
           initProgressCallback: (report) => {
-            // AI FIX APPLIED: "Pet the watchdog" instantly inside the real native callback logic
-            resetStallTimeout();
+            console.log(report.text);
+            
+            // Reset the timeout whenever the engine reports progress
+            resetStallTimeout(); 
+            setStatus('loading');
 
             const pct = Math.round((report.progress ?? 0) * 100);
             setProgress(pct);
             setProgressText(report.text ?? '');
-
-            if (report.progress >= 1) {
-              if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
-              setStatus('ready');
-            }
           },
         }
       );
@@ -95,13 +93,15 @@ export function useWebLLM(): UseWebLLMReturn {
     globalEnginePromise
       .then((engine) => {
         if (cancelled) return;
-        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current); // Stop watchdog on success
+        
+        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
         engineRef.current = engine;
         setStatus('ready');
+        setProgress(100);
       })
       .catch((err) => {
         if (cancelled) return;
-        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current); // Stop watchdog on standard error
+        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
         console.error('[WebLLM] Engine native initialization failure:', err);
         setStatus('error');
       });
@@ -149,5 +149,5 @@ export function useWebLLM(): UseWebLLMReturn {
     abortRef.current = true;
   }, []);
 
-  return { status, progress, progressText, streamedTokens, tokensSaved, generate , cancel };
+  return { status, progress, progressText, streamedTokens, tokensSaved, generate, cancel };
 }
