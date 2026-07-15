@@ -1,25 +1,27 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 1. ADD THIS: Exclude native node binaries from the server compile
   serverExternalPackages: ["@huggingface/transformers"],
 
-  webpack: (config) => {
-    // Keep your existing worker rule completely intact!
-    config.module.rules.push({
-      test: /\.worker\.(js|ts)$/,
-      type: "asset/resource",
-      generator: {
-        filename: "static/chunks/[name].[contenthash].js",
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
+        ],
       },
-    });
+    ];
+  },
 
-    // 2. ADD THIS: Allow WebAssembly experiments for ONNX Runtime Web
+  webpack: (config) => {
+    // DO NOT add any rule for /\.worker\.(js|ts)$/ — let native
+    // `new Worker(new URL(...))` handling transpile it correctly.
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,
     };
-
     return config;
   },
 };

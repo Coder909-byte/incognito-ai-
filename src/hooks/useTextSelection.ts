@@ -1,43 +1,62 @@
 'use client';
 // src/hooks/useTextSelection.ts
-// Fires on non-empty window.getSelection() — drives ContextActionToolbar mount.
+// Tracks selection inside a <textarea> element (native window.getSelection()
+// cannot see textarea selections - they use a separate selectionStart/End API).
 
 import { useEffect, useCallback, useState } from 'react';
 import type { SelectionState } from '@/types';
 
-export function useTextSelection(containerRef?: React.RefObject<HTMLElement | null>): SelectionState {
-  const [state, setState] = useState<SelectionState>({ rect: null, text: '' });
+export function useTextSelection(
+  containerRef
+) {
+  const [state, setState] = useState({ rect: null, text: '' });
 
   const handleSelection = useCallback(() => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    const textarea = containerRef && containerRef.current ? containerRef.current.querySelector('textarea') : null;
+    if (!textarea) {
       setState({ rect: null, text: '' });
       return;
     }
-    const text = selection.toString().trim();
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+
+    if (start === end) {
+      setState({ rect: null, text: '' });
+      return;
+    }
+
+    const text = textarea.value.slice(start, end).trim();
     if (!text) {
       setState({ rect: null, text: '' });
       return;
     }
 
-    // If containerRef is provided, only track selections within that element
-    if (containerRef?.current) {
-      const range = selection.getRangeAt(0);
-      if (!containerRef.current.contains(range.commonAncestorContainer)) {
-        setState({ rect: null, text: '' });
-        return;
-      }
-    }
+    const rect = textarea.getBoundingClientRect();
+    const approxRect = new DOMRect(
+      rect.left + rect.width / 2 - 60,
+      rect.top,
+      120,
+      20
+    );
 
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    setState({ rect, text });
+    setState({ rect: approxRect, text });
   }, [containerRef]);
 
   useEffect(() => {
-    document.addEventListener('selectionchange', handleSelection);
-    return () => document.removeEventListener('selectionchange', handleSelection);
-  }, [handleSelection]);
+    const textarea = containerRef && containerRef.current ? containerRef.current.querySelector('textarea') : null;
+    if (!textarea) return;
+
+    textarea.addEventListener('select', handleSelection);
+    textarea.addEventListener('mouseup', handleSelection);
+    textarea.addEventListener('keyup', handleSelection);
+
+    return () => {
+      textarea.removeEventListener('select', handleSelection);
+      textarea.removeEventListener('mouseup', handleSelection);
+      textarea.removeEventListener('keyup', handleSelection);
+    };
+  }, [containerRef, handleSelection]);
 
   return state;
 }

@@ -1,27 +1,52 @@
 // src/workers/web-llm.worker.ts
-// WebWorker isolation for @mlc-ai/web-llm — model compilation and generation
-// never touches the main thread.
+import { pipeline, env } from "@huggingface/transformers";
 
-import { WebWorkerMLCEngineHandler } from '@mlc-ai/web-llm';
+console.log("[worker] file evaluated, top level");
 
-// Guard: check WebGPU availability before initialising the handler
-if (typeof navigator === 'undefined' || !('gpu' in navigator)) {
-  self.postMessage({ type: 'NO_WEBGPU' });
-} else {
-  // WebWorkerMLCEngineHandler listens on self and handles all message routing
-  // including model loading progress, token streaming, and completion signals.
-  new WebWorkerMLCEngineHandler();
-  
-  // The handler automatically sets up onmessage to handle:
-  // - 'load' messages with model ID and config
-  // - 'generate' messages with prompts
-  // - 'interrupt' messages to cancel generation
-  // It will post back:
-  // - { type: 'status', status: 'loading'|'ready'|'error' }
-  // - { type: 'progress', progress: 0-1, text: '...' }
-  // - { type: 'token', token: '...' }
-  // - { type: 'done', text: '...' }
-  // - { type: 'error', error: '...' }
-  
-  self.postMessage({ type: 'STATUS', status: 'loading' });
+if (env.backends?.onnx) {
+  const onnxBackend: any = env.backends.onnx;
+  if (!onnxBackend.wasm) onnxBackend.wasm = {};
+  onnxBackend.wasm.numThreads = 1;
+  onnxBackend.wasm.simd = false;
 }
+
+self.postMessage({ type: "booted" });
+
+self.onmessage = async (event: MessageEvent) => {
+  console.log("[worker] received message:", event.data);
+  if (event.data?.type !== "load") return;
+
+  try {
+    self.postMessage({ type: "status", status: "loading", progressText: "Starting model fetch..." });
+    console.log("[worker] calling pipeline()...");
+
+    const generator = await pipeline(
+      "text-generation",
+      "onnx-community/Qwen2.5-0.5B-Instruct",
+      {
+        device: "wasm",
+        dtype: "q4",
+        progress_callback: (p: any) => {
+          console.log("[worker] progress:", p);
+          self.postMessage({
+            type: "progress",
+            progress: p.progress || 0,
+            text: `Downloading weights: ${p.file || ""} (${Math.round(p.progress || 0)}%)`,
+          });
+        },
+      }
+    );
+
+    console.log("[worker] pipeline resolved, engine ready");
+    self.postMessage({ type: "status", status: "ready" });
+    (self as any).__generator = generator;
+  } catch (err) {
+    console.error("[worker] CAUGHT error:", err);
+    self.postMessage({ type: "error", error: err instanceof Error ? err.message : String(err) });
+  }
+};
+
+self.onunhandledrejection = (event) => {
+  console.error("[worker] unhandled rejection:", event.reason);
+  self.postMessage({ type: "error", error: `Unhandled rejection: ${event.reason}` });
+};

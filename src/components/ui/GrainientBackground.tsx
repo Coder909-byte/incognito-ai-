@@ -8,20 +8,37 @@ interface GrainientBackgroundProps {
   className?: string;
 }
 
+const TARGET_FPS = 20;
+const FRAME_INTERVAL = 1000 / TARGET_FPS;
+const NOISE_SCALE = 4; // render grain at 1/4 resolution, upscale via CSS
+
 export default function GrainientBackground({ className = '' }: GrainientBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const noiseCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number>(0);
   const phaseRef = useRef(0);
   const pausedRef = useRef(false);
+  const lastFrameTimeRef = useRef(0);
 
-  const draw = useCallback(() => {
+  const draw = useCallback((timestamp: number) => {
+    if (pausedRef.current) {
+      rafRef.current = requestAnimationFrame(draw);
+      return;
+    }
+
+    // Throttle to TARGET_FPS
+    if (timestamp - lastFrameTimeRef.current < FRAME_INTERVAL) {
+      rafRef.current = requestAnimationFrame(draw);
+      return;
+    }
+    lastFrameTimeRef.current = timestamp;
+
     const canvas = canvasRef.current;
-    if (!canvas || pausedRef.current) return;
-
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    phaseRef.current += 0.003;
+    phaseRef.current += 0.02;
     const t = phaseRef.current;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -30,7 +47,7 @@ export default function GrainientBackground({ className = '' }: GrainientBackgro
     ctx.fillStyle = '#09090b';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Radial aurora — emerald at top-center, violet at bottom-right
+    // Radial aurora
     const aurora1 = ctx.createRadialGradient(
       canvas.width * 0.4, canvas.height * 0.2, 0,
       canvas.width * 0.4, canvas.height * 0.2, canvas.width * 0.55
@@ -49,18 +66,28 @@ export default function GrainientBackground({ className = '' }: GrainientBackgro
     ctx.fillStyle = aurora2;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Grain noise — manual pixel scatter (lightweight, no feTurbulence overhead on canvas)
-    const imageData = ctx.createImageData(canvas.width, canvas.height);
-    const data = imageData.data;
-    const step = 3; // only sample every 3rd pixel for performance
-    for (let i = 0; i < data.length; i += 4 * step) {
-      const noise = (Math.random() - 0.5) * 18;
-      data[i] = noise + 9;
-      data[i + 1] = noise + 9;
-      data[i + 2] = noise + 9;
-      data[i + 3] = 20; // very low alpha — grain effect
+    // Grain — draw at low resolution on offscreen canvas, then blit scaled up
+    const noiseCanvas = noiseCanvasRef.current;
+    if (noiseCanvas) {
+      const nCtx = noiseCanvas.getContext('2d');
+      if (nCtx) {
+        const imageData = nCtx.createImageData(noiseCanvas.width, noiseCanvas.height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const noise = (Math.random() - 0.5) * 18;
+          data[i] = noise + 9;
+          data[i + 1] = noise + 9;
+          data[i + 2] = noise + 9;
+          data[i + 3] = 20;
+        }
+        nCtx.putImageData(imageData, 0, 0);
+
+        // Blit the small noise canvas scaled up over the full-size canvas.
+        // Browsers handle this upscale essentially for free (GPU compositing).
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(noiseCanvas, 0, 0, canvas.width, canvas.height);
+      }
     }
-    ctx.putImageData(imageData, 0, 0);
 
     rafRef.current = requestAnimationFrame(draw);
   }, []);
@@ -69,31 +96,34 @@ export default function GrainientBackground({ className = '' }: GrainientBackgro
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Offscreen low-res canvas for grain generation
+    if (!noiseCanvasRef.current) {
+      noiseCanvasRef.current = document.createElement('canvas');
+    }
+
     const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+      if (noiseCanvasRef.current) {
+        noiseCanvasRef.current.width = Math.ceil(window.innerWidth / NOISE_SCALE);
+        noiseCanvasRef.current.height = Math.ceil(window.innerHeight / NOISE_SCALE);
+      }
     };
     resize();
     window.addEventListener('resize', resize);
 
-    // IntersectionObserver — pause when off-screen
     const observer = new IntersectionObserver(
       ([entry]) => {
         pausedRef.current = !entry.isIntersecting;
-        if (entry.isIntersecting && !rafRef.current) {
-          rafRef.current = requestAnimationFrame(draw);
-        }
       },
       { threshold: 0 }
     );
     observer.observe(canvas);
 
-    // Respect prefers-reduced-motion
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (!mq.matches) {
       rafRef.current = requestAnimationFrame(draw);
     } else {
-      // Static fallback — just fill base + aurora once
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.fillStyle = '#09090b';

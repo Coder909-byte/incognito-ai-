@@ -1,7 +1,6 @@
 'use client';
 
 // src/hooks/useWebLLM.ts
-
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { WebLLMStatus } from '@/types';
 import { estimateTokensSaved } from '@/lib/analytics';
@@ -40,37 +39,59 @@ export function useWebLLM(): UseWebLLMReturn {
 
     let cancelled = false;
 
-    // YOUR WATCHDOG TIMER: If no progress or loading success in 300s, trigger error state
     const resetStallTimeout = () => {
       if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
       
       stallTimeoutRef.current = setTimeout(() => {
         if (!cancelled && !globalWorkerInitialized && statusRef.current !== 'ready') {
-          console.warn('[ONNX Engine] Local engine stalled: No progress for 300s');
+          console.warn('[ONNX Engine] Local engine stalled: No progress received.');
           setStatus('error'); 
           setProgressText('Engine initialization timed out.');
         }
-      }, 300000); // 5 minutes threshold
+      }, 300000); // 5-minute timeout window
     };
 
-    // Start watchdog immediately on mount
     resetStallTimeout();
 
+    // 1. Instantiate Worker with { type: 'module' }
     if (!globalWorker) {
-      globalWorker = new Worker(
-        new URL('../workers/web-llm.worker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      try {
+        globalWorker = new Worker(
+          new URL('../workers/web-llm.worker.ts', import.meta.url),
+          { type: 'module' }
+        );
+      } catch (err) {
+        console.error('[ONNX Hook] Failed to instantiate worker:', err);
+        setStatus('error');
+        setProgressText('Failed to spin up background worker thread.');
+        return;
+      }
     }
+
+    // 2. BIND ERROR HANDLERS PERMANENTLY (No more silent deaths!)
+    globalWorker.onerror = (errorEvent) => {
+      console.error('[ONNX Worker Runtime Error]:', errorEvent.message, 'in', errorEvent.filename, 'line', errorEvent.lineno);
+      setStatus('error');
+      setProgressText(`Worker Error: ${errorEvent.message}`);
+    };
+
+    globalWorker.onmessageerror = (errorEvent) => {
+      console.error('[ONNX Worker Message Deserialization Error]:', errorEvent);
+      setStatus('error');
+    };
 
     const handleMessage = (e: MessageEvent) => {
       if (cancelled) return;
       const { type, status: workerStatus, progress: loadProgress, text, error } = e.data;
 
-      // Every time the worker communicates progress, reset the stall timer
+      // Unconditional heartbeat check
       resetStallTimeout();
 
       switch (type) {
+        case 'booted':
+          console.log('[ONNX Hook] Success! Handshake established. Worker is alive.');
+          break;
+
         case 'status':
           if (workerStatus === 'ready') {
             if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
@@ -105,7 +126,7 @@ export function useWebLLM(): UseWebLLMReturn {
           if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
           setStatus('error');
           setProgressText(`Engine Failure: ${error}`);
-          console.error('[ONNX Worker Error]:', error);
+          console.error('[ONNX Worker Processing Error]:', error);
           break;
       }
     };
@@ -140,6 +161,7 @@ export function useWebLLM(): UseWebLLMReturn {
     await new Promise<void>((resolve) => {
       onDoneRef.current = (finalText: string) => {
         const saved = estimateTokensSaved(currentPromptRef.current, finalText);
+        setStreamedTokens(finalText);
         setTokensSaved((prev) => prev + saved);
         resolve();
       };

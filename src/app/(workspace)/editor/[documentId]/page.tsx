@@ -7,6 +7,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import EditorCanvas from '@/components/ui/EditorCanvas';
+import ContextActionToolbar from '@/components/ui/ContextActionToolbar';
+import { useTextSelection } from '@/hooks/useTextSelection';
 import StreamingTerminalBlock from '@/components/ui/StreamingTerminalBlock';
 // 1. IMPORT THE GLOBAL CONTEXT HOOK HERE
 import { useWebLLMContext } from '@/components/providers/WebLLMProvider';
@@ -48,6 +50,11 @@ export default function EditorPage() {
 
   // 2. CONSUME THE ACTIVE GLOBAL ENGINE STATE HERE
   const { status } = useWebLLMContext();
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const selection = useTextSelection(editorContainerRef);
+  const handleToolbarAction = (action: string, text: string) => {
+    console.log('[toolbar] action triggered:', action, text);
+  };
 
   // State for document content (allows editing)
   const [doc, setDoc] = useState<Document | null>(() => MOCK_DOCS.find((d) => d.id === documentId) || null);
@@ -119,7 +126,8 @@ export default function EditorPage() {
 
       {/* Editor + Terminal */}
       <div className="flex-1 flex flex-col lg:flex-row gap-6 p-6 overflow-hidden">
-        <div className="editor-panel flex-1 overflow-y-auto">
+        <div ref={editorContainerRef} className="editor-panel flex-1 overflow-y-auto relative">
+          <ContextActionToolbar selection={selection} onAction={handleToolbarAction} />
           <EditorCanvas
             value={doc.content}
             onChange={handleContentChange}
