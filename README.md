@@ -19,10 +19,6 @@ Because this app is designed strictly for local-first execution to protect data,
 3. Start the application development server with `npm run dev`.
 4. Open `http://localhost:3002` (or your configured port), highlight any text block, and test the offline workspace engine immediately.
 
-### 🎥 Demo Video & Screenshots
-[Paste your screen recording link or insert your uploaded screenshots right her
-
-
 PROBLEM STATEMENT-Traditional AI workspaces rely heavily on cloud-based LLM architectures. This introduces massive vulnerabilities regarding data egress, cloud inference costs, third-party data logging, and complete reliance on internet connectivity. For users handling highly sensitive data, corporate secrets, or personal notes, sending prompts to a remote cloud server is an unacceptable privacy risk.
 
 SOLUTION OVERVIEW-
