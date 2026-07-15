@@ -1,6 +1,6 @@
 # IncognitoAI – Private Local AI Document Workspace
 
-### 1. What you built
+### 
 IncognitoAI is a fully local, privacy-first collaborative document workspace featuring inline smart search and contextual assistance. Users can highlight words or paragraphs directly inside the canvas to seamlessly trigger localized text summaries, context expansions, or search tasks.
 
 ### 2. Why it matters
