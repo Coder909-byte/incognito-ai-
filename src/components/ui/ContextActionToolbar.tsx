@@ -1,7 +1,7 @@
 'use client';
 // src/components/ui/ContextActionToolbar.tsx
 // Floats above text selection with CSS transition entrance.
-// Triggers rewrite/summarize/expand actions via WebLLM context.
+// Triggers rewrite/summarize/expand actions via ONNX context.
 
 import { useRef, useEffect, useState } from 'react';
 import { useWebLLMContext } from '@/components/providers/WebLLMProvider';

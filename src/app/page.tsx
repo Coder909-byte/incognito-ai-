@@ -39,7 +39,7 @@ export default function LandingPage() {
               id: 'feature-webgpu',
               icon: '⬡',
               title: 'WebGPU Inference',
-              body: 'Llama 3.2-1B runs entirely in your browser via the WebGPU API. No server round-trips. No per-token billing.',
+              body: 'Qwen-2.5 0.5B (Local ONNX) runs entirely in your browser via the WebGPU API. No server round-trips. No per-token billing.',
             },
             {
               id: 'feature-zero-egress',

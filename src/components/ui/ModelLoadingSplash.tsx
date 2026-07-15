@@ -1,6 +1,6 @@
 'use client';
 // src/components/ui/ModelLoadingSplash.tsx
-// Fullscreen model-loading splash screen shown while Llama-3.2-1B downloads and compiles.
+// Fullscreen model-loading splash screen shown while Qwen-2.5 0.5B downloads and compiles.
 // PRD option 3: dedicated fullscreen experience with progress visualization.
 
 import { useEffect, useRef } from 'react';
@@ -111,7 +111,7 @@ export default function ModelLoadingSplash({ progress, progressText }: ModelLoad
     ? progressText.length > 60
       ? progressText.slice(0, 60) + '…'
       : progressText
-    : 'Initialising local inference engine…';
+    : 'Initialising Local Engine…';
 
   return (
     <div
@@ -151,7 +151,7 @@ export default function ModelLoadingSplash({ progress, progressText }: ModelLoad
         {/* Model info */}
         <div className="text-center space-y-1">
           <p className="text-zinc-300 text-sm font-mono">
-            Loading <span className="text-emerald-400">Llama-3.2-1B</span>
+            Loading <span className="text-emerald-400">Qwen-2.5 0.5B (Local ONNX)</span>
           </p>
           <p className="text-zinc-600 text-xs font-mono">
             This model runs entirely in your browser.

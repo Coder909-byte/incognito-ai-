@@ -1,7 +1,7 @@
 'use client';
 // src/components/ui/EditorCanvas.tsx
 // Glassmorphic markdown editor surface.
-// Border morphs to emerald ONLY after WebLLM engine reports status: "ready".
+// Border morphs to emerald ONLY after ONNX engine reports status: "ready".
 // Uses CSS transitions instead of GSAP.
 
 import { useRef, useEffect, useCallback } from 'react';

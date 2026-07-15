@@ -1,15 +1,13 @@
 'use client';
+
 // src/hooks/useWebLLM.ts
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { CreateWebWorkerMLCEngine } from '@mlc-ai/web-llm';
 import type { WebLLMStatus } from '@/types';
 import { estimateTokensSaved } from '@/lib/analytics';
 
-const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC';
-
-let globalEnginePromise: Promise<any> | null = null;
 let globalWorker: Worker | null = null;
+let globalWorkerInitialized = false;
 
 export interface UseWebLLMReturn {
   status: WebLLMStatus;
@@ -22,131 +20,143 @@ export interface UseWebLLMReturn {
 }
 
 export function useWebLLM(): UseWebLLMReturn {
-  const engineRef = useRef<any>(null);
-  const abortRef = useRef(false);
-
-  const [status, setStatus] = useState<WebLLMStatus>(() => {
-    if (typeof window !== 'undefined' && !('gpu' in navigator)) {
-      return 'no_webgpu';
-    }
-    return 'loading';
-  });
+  const [status, setStatus] = useState<WebLLMStatus>('loading');
   const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState('');
+  const [progressText, setProgressText] = useState('Initializing local ONNX runtime...');
   const [streamedTokens, setStreamedTokens] = useState('');
   const [tokensSaved, setTokensSaved] = useState(0);
 
   const statusRef = useRef<WebLLMStatus>(status);
   const stallTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentPromptRef = useRef<string>('');
+  const onDoneRef = useRef<((text: string) => void) | null>(null);
 
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
 
   useEffect(() => {
-    const isNoWebGPU = status === 'no_webgpu';
-    if (isNoWebGPU) return;
+    if (typeof window === 'undefined') return;
 
     let cancelled = false;
 
-    // Resettable watchdog timer (180s for slow disk I/O / shader compilation on old hardware)
+    // YOUR WATCHDOG TIMER: If no progress or loading success in 300s, trigger error state
     const resetStallTimeout = () => {
       if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
       
       stallTimeoutRef.current = setTimeout(() => {
-        if (!cancelled && engineRef.current === null && statusRef.current !== 'ready') {
-          console.warn('[WebLLM] Local engine stalled: No progress for 180s');
+        if (!cancelled && !globalWorkerInitialized && statusRef.current !== 'ready') {
+          console.warn('[ONNX Engine] Local engine stalled: No progress for 300s');
           setStatus('error'); 
+          setProgressText('Engine initialization timed out.');
         }
-      }, 180000); 
+      }, 300000); // 5 minutes threshold
     };
 
-    // Initialize watchdog timer immediately on mount
+    // Start watchdog immediately on mount
     resetStallTimeout();
 
-    if (!globalEnginePromise) {
+    if (!globalWorker) {
       globalWorker = new Worker(
         new URL('../workers/web-llm.worker.ts', import.meta.url),
         { type: 'module' }
       );
-      
-      // Fixed: using the correct property 'initProgressCallback' recognized by MLCEngineConfig
-      globalEnginePromise = CreateWebWorkerMLCEngine(
-        globalWorker,
-        MODEL_ID,
-        {
-          initProgressCallback: (report) => {
-            console.log(report.text);
-            
-            // Reset the timeout whenever the engine reports progress
-            resetStallTimeout(); 
-            setStatus('loading');
-
-            const pct = Math.round((report.progress ?? 0) * 100);
-            setProgress(pct);
-            setProgressText(report.text ?? '');
-          },
-        }
-      );
     }
 
-    globalEnginePromise
-      .then((engine) => {
-        if (cancelled) return;
-        
-        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
-        engineRef.current = engine;
-        setStatus('ready');
-        setProgress(100);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
-        console.error('[WebLLM] Engine native initialization failure:', err);
-        setStatus('error');
-      });
+    const handleMessage = (e: MessageEvent) => {
+      if (cancelled) return;
+      const { type, status: workerStatus, progress: loadProgress, text, error } = e.data;
+
+      // Every time the worker communicates progress, reset the stall timer
+      resetStallTimeout();
+
+      switch (type) {
+        case 'status':
+          if (workerStatus === 'ready') {
+            if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+            setStatus('ready');
+            setProgress(100);
+            setProgressText('Local ONNX Engine Active');
+            globalWorkerInitialized = true;
+          } else {
+            setStatus(workerStatus);
+          }
+          break;
+
+        case 'progress':
+          setStatus('loading');
+          setProgress(Math.round(loadProgress));
+          setProgressText(text || 'Loading local weights...');
+          break;
+
+        case 'generating_start':
+          setStatus('generating');
+          break;
+
+        case 'done':
+          setStreamedTokens(text);
+          setStatus('ready');
+          if (onDoneRef.current) {
+            onDoneRef.current(text);
+          }
+          break;
+
+        case 'error':
+          if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+          setStatus('error');
+          setProgressText(`Engine Failure: ${error}`);
+          console.error('[ONNX Worker Error]:', error);
+          break;
+      }
+    };
+
+    globalWorker.addEventListener('message', handleMessage);
+
+    if (!globalWorkerInitialized) {
+      globalWorker.postMessage({ type: 'load' });
+    } else {
+      if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+      setStatus('ready');
+      setProgress(100);
+      setProgressText('Local ONNX Engine Active');
+    }
 
     return () => {
       cancelled = true;
       if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+      globalWorker?.removeEventListener('message', handleMessage);
     };
   }, []);
 
   const generate = useCallback(async (prompt: string) => {
-    if (!engineRef.current || status !== 'ready') return;
-    abortRef.current = false;
+    if (!globalWorker || status === 'loading') return;
+    
     setStreamedTokens('');
     setStatus('generating');
+    currentPromptRef.current = prompt;
 
-    let fullCompletion = '';
-    try {
-      const chunks = await engineRef.current.chat.completions.create({
-        messages: [{ role: 'user', content: prompt }],
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 512,
-      });
+    globalWorker.postMessage({ type: 'generate', prompt });
 
-      for await (const chunk of chunks) {
-        if (abortRef.current) break;
-        const delta = chunk.choices[0]?.delta?.content ?? '';
-        if (delta) {
-          fullCompletion += delta;
-          setStreamedTokens((prev) => prev + delta);
-        }
-      }
-
-      const saved = estimateTokensSaved(prompt, fullCompletion);
-      setTokensSaved((prev) => prev + saved);
-    } catch (err) {
-      console.error('[WebLLM] Generate error:', err);
-    } finally {
-      setStatus('ready');
-    }
+    await new Promise<void>((resolve) => {
+      onDoneRef.current = (finalText: string) => {
+        const saved = estimateTokensSaved(currentPromptRef.current, finalText);
+        setTokensSaved((prev) => prev + saved);
+        resolve();
+      };
+    });
   }, [status]);
 
   const cancel = useCallback(() => {
-    abortRef.current = true;
+    if (globalWorker) {
+      globalWorker.terminate();
+      globalWorker = new Worker(
+        new URL('../workers/web-llm.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      globalWorkerInitialized = false;
+      globalWorker.postMessage({ type: 'load' });
+      setStatus('ready');
+    }
   }, []);
 
   return { status, progress, progressText, streamedTokens, tokensSaved, generate, cancel };
