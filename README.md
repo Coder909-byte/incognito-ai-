@@ -64,4 +64,14 @@ Initialize the Workspace: Open the workspace editor view. The background worker 
 Drafting Markdown: Create and organize private documents directly inside the interactive distraction-free workspace layout.
 Triggering Local Inference: Select code blocks or specific text strings in the canvas to prompt your local on-device model for quick markdown optimization, synthesis, or editing context.
 
+screenshots
+<img width="1440" height="900" alt="Screenshot 2026-07-13 at 1 38 46 PM" src="https://github.com/user-attachments/assets/46f60b38-6c57-4244-917e-9b9ee5950a0e" />
+<img width="1440" height="815" alt="Image 15-07-26 at 5 41 PM" src="https://github.com/user-attachments/assets/411a269c-01dd-443f-9004-035982989172" />
+<img width="1435" height="816" alt="Image 15-07-26 at 5 39 PM" src="https://github.com/user-attachments/assets/b0032b12-245c-4dd9-8533-069d580a8a76" />
+<img width="1438" height="813" alt="Image 15-07-26 at 5 42 PM" src="https://github.com/user-attachments/assets/6d24a976-0298-47d4-a1e9-c3d8188bb4e8" />
+<img width="1440" height="814" alt="Image 15-07-26 at 5 43 PM (1)" src="https://github.com/user-attachments/assets/76fc688f-ba05-4285-9474-1e7f32ac007b" />
+
+
+
+
 
