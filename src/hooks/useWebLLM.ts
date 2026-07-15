@@ -41,11 +41,11 @@ export function useWebLLM(): UseWebLLMReturn {
 
     const resetStallTimeout = () => {
       if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
-      
+
       stallTimeoutRef.current = setTimeout(() => {
         if (!cancelled && !globalWorkerInitialized && statusRef.current !== 'ready') {
           console.warn('[ONNX Engine] Local engine stalled: No progress received.');
-          setStatus('error'); 
+          setStatus('error');
           setProgressText('Engine initialization timed out.');
         }
       }, 300000); // 5-minute timeout window
@@ -60,6 +60,7 @@ export function useWebLLM(): UseWebLLMReturn {
           new URL('../workers/web-llm.worker.ts', import.meta.url),
           { type: 'module' }
         );
+        console.log('[hook] worker instantiated');
       } catch (err) {
         console.error('[ONNX Hook] Failed to instantiate worker:', err);
         setStatus('error');
@@ -68,9 +69,16 @@ export function useWebLLM(): UseWebLLMReturn {
       }
     }
 
-    // 2. BIND ERROR HANDLERS PERMANENTLY (No more silent deaths!)
+    // 2. BIND ERROR HANDLERS PERMANENTLY
     globalWorker.onerror = (errorEvent) => {
-      console.error('[ONNX Worker Runtime Error]:', errorEvent.message, 'in', errorEvent.filename, 'line', errorEvent.lineno);
+      console.error(
+        '[ONNX Worker Runtime Error]:',
+        errorEvent.message,
+        'in',
+        errorEvent.filename,
+        'line',
+        errorEvent.lineno
+      );
       setStatus('error');
       setProgressText(`Worker Error: ${errorEvent.message}`);
     };
@@ -82,6 +90,8 @@ export function useWebLLM(): UseWebLLMReturn {
 
     const handleMessage = (e: MessageEvent) => {
       if (cancelled) return;
+      console.log('[hook] RAW message from worker:', e.data);
+
       const { type, status: workerStatus, progress: loadProgress, text, error } = e.data;
 
       // Unconditional heartbeat check
@@ -134,6 +144,7 @@ export function useWebLLM(): UseWebLLMReturn {
     globalWorker.addEventListener('message', handleMessage);
 
     if (!globalWorkerInitialized) {
+      console.log('[hook] posting load message to worker');
       globalWorker.postMessage({ type: 'load' });
     } else {
       if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
@@ -151,7 +162,7 @@ export function useWebLLM(): UseWebLLMReturn {
 
   const generate = useCallback(async (prompt: string) => {
     if (!globalWorker || status === 'loading') return;
-    
+
     setStreamedTokens('');
     setStatus('generating');
     currentPromptRef.current = prompt;
@@ -177,7 +188,8 @@ export function useWebLLM(): UseWebLLMReturn {
       );
       globalWorkerInitialized = false;
       globalWorker.postMessage({ type: 'load' });
-      setStatus('ready');
+      setStatus('loading'); // fixed: was incorrectly set to 'ready'
+      setProgressText('Reinitializing engine...');
     }
   }, []);
 
