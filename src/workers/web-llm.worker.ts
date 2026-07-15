@@ -1,7 +1,10 @@
 // src/workers/web-llm.worker.ts
-import { pipeline, env } from "@huggingface/transformers";
+import { pipeline as HF_Pipeline, env } from "@huggingface/transformers";
 
 console.log("[worker] file evaluated, top level");
+
+// Fix WASM caching error by bypassing buggy browser storage
+env.useBrowserCache = false;
 
 if (env.backends && env.backends.onnx) {
   const onnxBackend: any = env.backends.onnx;
@@ -23,7 +26,7 @@ self.onmessage = async (event: MessageEvent) => {
       self.postMessage({ type: "status", status: "loading", progressText: "Starting model fetch..." });
       console.log("[worker] calling pipeline()...");
 
-      generator = await pipeline(
+      generator = await HF_Pipeline(
         "text-generation",
         "onnx-community/Qwen2.5-0.5B-Instruct",
         {
@@ -62,10 +65,12 @@ self.onmessage = async (event: MessageEvent) => {
       self.postMessage({ type: "generating_start" });
       console.log("[worker] starting generation for prompt:", event.data.prompt);
 
+      // Tight limits + greedy execution to stop infinite looping over WASM
       const output = await generator(event.data.prompt, {
-        max_new_tokens: 128,
-        temperature: 0.7,
-        do_sample: true,
+        max_new_tokens: 64,
+        temperature: 0.3,
+        do_sample: false,
+        return_full_text: false,
       });
 
       console.log("[worker] generation complete:", output);
