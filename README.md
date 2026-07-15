@@ -1,6 +1,27 @@
-PROJECT NAME - INCOGNITO AI 
+# IncognitoAI – Private Local AI Document Workspace
 
-DESCRIPTION-A privacy-first, offline-capable markdown workspace powered entirely by local client-side WebGPU inference.
+### 1. What you built
+IncognitoAI is a fully local, privacy-first collaborative document workspace featuring inline smart search and contextual assistance. Users can highlight words or paragraphs directly inside the canvas to seamlessly trigger localized text summaries, context expansions, or search tasks.
+
+### 2. Why it matters
+Traditional AI writing assistants leak proprietary text, personal data, and intellectual property across networks to cloud APIs. IncognitoAI changes the paradigm by proving that high-performance, real-time AI context workflows can achieve absolute security and zero server data retention, reducing cloud compute infrastructure costs to $0.
+
+### 3. How it works
+The workspace captures structural text selection arrays from the custom inline document canvas. It dispatches text payloads across an asynchronous JavaScript channel directly into background execution loops, ensuring typing and rendering frame rates never drop below 60 FPS.
+
+### 4. How it uses On-Device AI
+The application operates completely offline. It integrates a 4-bit quantized `Qwen2.5-0.5B-Instruct` model directly within the user’s browser via **Hugging Face Transformers.js v3** and **ONNX Runtime Web**. The entire inference engine runs asynchronously inside an isolated browser HTML5 **Web Worker thread** to prevent UI thread lockups. Model weights are securely cached locally within the browser’s Cache Storage after the initial download.
+
+### 5. Setup & Usage Instructions (How others can run or try it)
+Because this app is designed strictly for local-first execution to protect data, run it locally using:
+1. Clone the repository: `git clone <your-repo-link>`
+2. Run `npm install` to load all packages.
+3. Start the application development server with `npm run dev`.
+4. Open `http://localhost:3002` (or your configured port), highlight any text block, and test the offline workspace engine immediately.
+
+### 🎥 Demo Video & Screenshots
+[Paste your screen recording link or insert your uploaded screenshots right her
+
 
 PROBLEM STATEMENT-Traditional AI workspaces rely heavily on cloud-based LLM architectures. This introduces massive vulnerabilities regarding data egress, cloud inference costs, third-party data logging, and complete reliance on internet connectivity. For users handling highly sensitive data, corporate secrets, or personal notes, sending prompts to a remote cloud server is an unacceptable privacy risk.
 
@@ -42,7 +63,5 @@ USAGE INSTRUCTION
 Initialize the Workspace: Open the workspace editor view. The background worker will check your local storage and automatically initialize the local WebGPU inference engine.
 Drafting Markdown: Create and organize private documents directly inside the interactive distraction-free workspace layout.
 Triggering Local Inference: Select code blocks or specific text strings in the canvas to prompt your local on-device model for quick markdown optimization, synthesis, or editing context.
-
-
 
 
